@@ -426,3 +426,31 @@ def test_load_projects_missing_last_used_at(mock_config, git_dir):
     save_config(config)
     projects = load_projects()
     assert projects[0].last_used_at == 0
+
+
+# Tests for ship_mode field
+
+
+def test_save_and_load_projects_with_ship_mode(mock_config):
+    """ship_mode round-trips through save/load (always pr)."""
+    projects = [
+        Project(path="/path/to/foo", name="foo"),
+        Project(path="/path/to/bar", name="bar"),
+    ]
+    save_projects(projects)
+
+    loaded = load_projects()
+    assert len(loaded) == 2
+    assert loaded[0].ship_mode == "pr"
+    assert loaded[1].ship_mode == "pr"
+
+
+def test_load_projects_missing_ship_mode_defaults_to_pr(mock_config, git_dir):
+    """Projects without ship_mode field default to 'pr'."""
+    add_project(str(git_dir))
+    config = load_config()
+    for p in config["projects"]:
+        p.pop("ship_mode", None)
+    save_config(config)
+    projects = load_projects()
+    assert projects[0].ship_mode == "pr"

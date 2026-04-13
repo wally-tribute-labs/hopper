@@ -2622,6 +2622,40 @@ def test_project_add_rejects_extra_arg(capsys):
     assert "unexpected argument" in captured.out
 
 
+def test_project_config_shows_pr_mode(tmp_path, monkeypatch, capsys):
+    """project config always shows ship_mode=pr."""
+    from hopper.cli import cmd_project
+    from hopper.projects import Project, save_projects
+
+    save_projects([Project(path="/path/to/repo", name="myproj")])
+    result = cmd_project(["config", "myproj"])
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "ship_mode=pr" in captured.out
+
+
+def test_project_config_project_not_found(tmp_path, monkeypatch, capsys):
+    """project config errors for unknown project."""
+    from hopper.cli import cmd_project
+    from hopper.projects import save_projects
+
+    save_projects([])
+    result = cmd_project(["config", "unknown"])
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "not found" in captured.out
+
+
+def test_project_config_missing_name(capsys):
+    """project config without name shows error."""
+    from hopper.cli import cmd_project
+
+    result = cmd_project(["config"])
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "project name required" in captured.out
+
+
 # Tests for screenshot command
 
 

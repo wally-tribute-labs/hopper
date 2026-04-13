@@ -184,7 +184,7 @@ def test_startup_archives_shipped_lodes(socket_path, temp_config, make_lode):
 
 
 def test_cleanup_worktree_on_startup_archive(socket_path, temp_config, make_lode):
-    """Startup archive triggers worktree and branch cleanup."""
+    """Startup archive triggers worktree cleanup but keeps branch for PR."""
     shipped_lode = make_lode(
         id="test-id",
         stage="shipped",
@@ -200,7 +200,6 @@ def test_cleanup_worktree_on_startup_archive(socket_path, temp_config, make_lode
             "hopper.server.find_project", return_value=Project(path="/fake/repo", name="myproject")
         ),
         patch("hopper.server.remove_worktree") as mock_remove_worktree,
-        patch("hopper.server.delete_branch") as mock_delete_branch,
     ):
         srv = Server(socket_path)
         thread = threading.Thread(target=srv.start, daemon=True)
@@ -215,19 +214,18 @@ def test_cleanup_worktree_on_startup_archive(socket_path, temp_config, make_lode
                 raise TimeoutError("Server did not start")
 
             for _ in range(50):
-                if mock_remove_worktree.called and mock_delete_branch.called:
+                if mock_remove_worktree.called:
                     break
                 time.sleep(0.1)
 
             mock_remove_worktree.assert_called_once_with("/fake/repo", str(worktree_dir))
-            mock_delete_branch.assert_called_once_with("/fake/repo", shipped_lode["branch"])
         finally:
             srv.stop()
             thread.join(timeout=2)
 
 
 def test_cleanup_worktree_runs_make_sail(socket_path, temp_config, make_lode):
-    """Cleanup runs make sail after worktree and branch cleanup."""
+    """Cleanup runs make sail after worktree removal."""
     lode = make_lode(
         id="test-id",
         stage="shipped",
@@ -242,14 +240,12 @@ def test_cleanup_worktree_runs_make_sail(socket_path, temp_config, make_lode):
             "hopper.server.find_project", return_value=Project(path="/fake/repo", name="myproject")
         ),
         patch("hopper.server.remove_worktree") as mock_remove_worktree,
-        patch("hopper.server.delete_branch") as mock_delete_branch,
         patch("hopper.server.subprocess.run") as mock_subprocess_run,
     ):
         srv = Server(socket_path)
         srv._cleanup_worktree(lode)
 
         mock_remove_worktree.assert_called_once_with("/fake/repo", str(worktree_dir))
-        mock_delete_branch.assert_called_once_with("/fake/repo", lode["branch"])
         mock_subprocess_run.assert_any_call(["make", "sail"], cwd="/fake/repo", capture_output=True)
 
 
@@ -269,7 +265,6 @@ def test_cleanup_worktree_make_sail_failure_silenced(socket_path, temp_config, m
             "hopper.server.find_project", return_value=Project(path="/fake/repo", name="myproject")
         ),
         patch("hopper.server.remove_worktree") as mock_remove_worktree,
-        patch("hopper.server.delete_branch") as mock_delete_branch,
         patch(
             "hopper.server.subprocess.run", side_effect=FileNotFoundError("make not found")
         ) as mock_subprocess_run,
@@ -278,7 +273,6 @@ def test_cleanup_worktree_make_sail_failure_silenced(socket_path, temp_config, m
         srv._cleanup_worktree(lode)
 
         mock_remove_worktree.assert_called_once_with("/fake/repo", str(worktree_dir))
-        mock_delete_branch.assert_called_once_with("/fake/repo", lode["branch"])
         mock_subprocess_run.assert_any_call(["make", "sail"], cwd="/fake/repo", capture_output=True)
 
 
@@ -292,7 +286,6 @@ def test_cleanup_skipped_without_worktree_dir(socket_path, temp_config, make_lod
             "hopper.server.find_project", return_value=Project(path="/fake/repo", name="myproject")
         ),
         patch("hopper.server.remove_worktree") as mock_remove_worktree,
-        patch("hopper.server.delete_branch") as mock_delete_branch,
     ):
         srv = Server(socket_path)
         thread = threading.Thread(target=srv.start, daemon=True)
@@ -312,7 +305,6 @@ def test_cleanup_skipped_without_worktree_dir(socket_path, temp_config, make_lod
                 time.sleep(0.1)
 
             mock_remove_worktree.assert_not_called()
-            mock_delete_branch.assert_not_called()
         finally:
             srv.stop()
             thread.join(timeout=2)
@@ -328,7 +320,6 @@ def test_cleanup_skipped_when_project_not_found(socket_path, temp_config, make_l
     with (
         patch("hopper.server.find_project", return_value=None),
         patch("hopper.server.remove_worktree") as mock_remove_worktree,
-        patch("hopper.server.delete_branch") as mock_delete_branch,
     ):
         srv = Server(socket_path)
         thread = threading.Thread(target=srv.start, daemon=True)
@@ -348,10 +339,34 @@ def test_cleanup_skipped_when_project_not_found(socket_path, temp_config, make_l
                 time.sleep(0.1)
 
             mock_remove_worktree.assert_not_called()
-            mock_delete_branch.assert_not_called()
         finally:
             srv.stop()
             thread.join(timeout=2)
+
+
+def test_cleanup_worktree_never_deletes_branch(socket_path, temp_config, make_lode):
+    """Cleanup removes worktree but never deletes branch (PRs need it)."""
+    lode = make_lode(
+        id="test-id",
+        stage="shipped",
+        project="myproject",
+        branch="hopper-test-id",
+    )
+    worktree_dir = temp_config / "lodes" / lode["id"] / "worktree"
+    worktree_dir.mkdir(parents=True)
+
+    with (
+        patch(
+            "hopper.server.find_project",
+            return_value=Project(path="/fake/repo", name="myproject"),
+        ),
+        patch("hopper.server.remove_worktree") as mock_remove_worktree,
+        patch("hopper.server.subprocess.run"),
+    ):
+        srv = Server(socket_path)
+        srv._cleanup_worktree(lode)
+
+        mock_remove_worktree.assert_called_once_with("/fake/repo", str(worktree_dir))
 
 
 def test_server_broadcast_requires_type():
@@ -1234,7 +1249,7 @@ def test_lode_unarchive(socket_path, server, temp_config, make_lode):
 
 
 def test_cleanup_worktree_on_disconnect_archive(socket_path, server, temp_config, make_lode):
-    """Disconnect archive triggers worktree and branch cleanup."""
+    """Disconnect archive triggers worktree cleanup but keeps branch for PR."""
     lode = make_lode(
         id="test-id",
         stage="shipped",
@@ -1253,7 +1268,6 @@ def test_cleanup_worktree_on_disconnect_archive(socket_path, server, temp_config
             "hopper.server.find_project", return_value=Project(path="/fake/repo", name="myproject")
         ),
         patch("hopper.server.remove_worktree") as mock_remove_worktree,
-        patch("hopper.server.delete_branch") as mock_delete_branch,
     ):
         client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         client.connect(str(socket_path))
@@ -1274,7 +1288,6 @@ def test_cleanup_worktree_on_disconnect_archive(socket_path, server, temp_config
                 break
 
         mock_remove_worktree.assert_called_once_with("/fake/repo", str(worktree_dir))
-        mock_delete_branch.assert_called_once_with("/fake/repo", lode["branch"])
 
 
 def test_no_auto_archive_non_shipped_on_disconnect(socket_path, server, temp_config, make_lode):

@@ -19,6 +19,7 @@ class Project:
     name: str  # Basename of directory
     disabled: bool = False  # True if removed but has existing sessions
     last_used_at: int = 0
+    ship_mode: str = "pr"
 
 
 def validate_git_dir(path: str) -> bool:
@@ -82,6 +83,7 @@ def load_projects() -> list[Project]:
                     name=item["name"],
                     disabled=item.get("disabled", False),
                     last_used_at=item.get("last_used_at", 0),
+                    ship_mode=item.get("ship_mode", "pr"),
                 )
             )
     return projects
@@ -100,6 +102,7 @@ def save_projects(projects: list[Project]) -> None:
             "name": p.name,
             "disabled": p.disabled,
             "last_used_at": p.last_used_at,
+            "ship_mode": p.ship_mode,
         }
         for p in projects
     ]

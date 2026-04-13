@@ -72,6 +72,7 @@ class BaseRunner:
         self.claude_session_id: str = ""
         self.project_name: str = ""
         self.project_dir: str = ""
+        self._project = None  # Resolved Project object, available to subclass _setup
         # Activity monitor state
         self._monitor_thread: threading.Thread | None = None
         self._monitor_stop = threading.Event()
@@ -121,6 +122,7 @@ class BaseRunner:
                     project = find_project(project_name)
                     if project:
                         self.project_dir = project.path
+                        self._project = project
 
                 # Let subclass extract additional data
                 self._load_lode_data(lode_data)

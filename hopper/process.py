@@ -266,15 +266,10 @@ class ProcessRunner(BaseRunner):
         if _has_makefile(self.worktree_path):
             self.use_env = True
 
-        # Pre-flight: project repo must be clean
-        if is_dirty(self.project_dir):
-            self._setup_error = f"Project repo has uncommitted changes: {self.project_dir}"
-            print(self._setup_error)
-            print("Commit or stash changes before shipping.")
-            print(f"hint: after fixing, restart with: hop restart {self.lode_id}")
-            logger.error(f"setup error lode={self.lode_id}: {self._setup_error}")
-            return 1
-
+        # Always PR mode: run in the worktree, push branch + create PR.
+        # No pre-flight dirty-check on project repo — PR mode never touches it
+        # locally, so uncommitted changes there don't block shipping.
+        self._prompt_name = "ship_pr"
         self._cwd = str(self.worktree_path)
 
         if self.is_first_run:
@@ -292,6 +287,8 @@ class ProcessRunner(BaseRunner):
                 self._context["project"] = self.project_name
             if self.project_dir:
                 self._context["dir"] = self.project_dir
+            if self.lode_title:
+                self._context["title"] = self.lode_title
 
         logger.debug(f"ship setup complete lode={self.lode_id}")
         # Capture diff numstat for stats analysis

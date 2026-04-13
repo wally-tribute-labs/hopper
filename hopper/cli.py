@@ -367,6 +367,7 @@ def cmd_project(args: list[str]) -> int:
     from hopper.client import reload_projects
     from hopper.projects import (
         add_project,
+        find_project,
         load_projects,
         remove_project,
         rename_project,
@@ -380,12 +381,13 @@ def cmd_project(args: list[str]) -> int:
     parser.add_argument(
         "action",
         nargs="?",
-        choices=["add", "remove", "rename", "list"],
+        choices=["add", "remove", "rename", "list", "config"],
         default="list",
         help="Action to perform (default: list)",
     )
     parser.add_argument("path", nargs="?", help="Path (for add) or name (for remove/rename)")
-    parser.add_argument("new_name", nargs="?", help="New name (for rename)")
+    parser.add_argument("new_name", nargs="?", help="New name (for rename) or key (for config)")
+    parser.add_argument("config_value", nargs="?", help="Value (for config set)")
     try:
         parsed = parse_args(parser, args)
     except SystemExit:
@@ -395,8 +397,13 @@ def cmd_project(args: list[str]) -> int:
         parser.print_usage()
         return 1
 
-    if parsed.action != "rename" and parsed.new_name is not None:
+    if parsed.action not in ("rename", "config") and parsed.new_name is not None:
         print(f"error: unexpected argument: {parsed.new_name}")
+        parser.print_usage()
+        return 1
+
+    if parsed.action != "config" and parsed.config_value is not None:
+        print(f"error: unexpected argument: {parsed.config_value}")
         parser.print_usage()
         return 1
 
@@ -406,8 +413,8 @@ def cmd_project(args: list[str]) -> int:
             print("No projects configured. Use: hop project add <path>")
             return 0
         for p in projects:
-            status = " (disabled)" if p.disabled else ""
-            print(f"{p.name}{status}")
+            suffix = " (disabled)" if p.disabled else ""
+            print(f"{p.name}{suffix}")
             print(f"  {p.path}")
         return 0
 
@@ -466,6 +473,18 @@ def cmd_project(args: list[str]) -> int:
         else:
             print(f"Project not found: {parsed.path}")
             return 1
+
+    if parsed.action == "config":
+        if not parsed.path:
+            print("error: project name required for config")
+            parser.print_usage()
+            return 1
+        project = find_project(parsed.path)
+        if not project:
+            print(f"Project not found: {parsed.path}")
+            return 1
+        print("ship_mode=pr (all projects ship via pull request)")
+        return 0
 
     return 0
 

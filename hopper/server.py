@@ -29,7 +29,7 @@ from hopper.backlog import (
     find_by_prefix as find_backlog_by_prefix,
 )
 from hopper.claude import spawn_claude
-from hopper.git import delete_branch, remove_worktree
+from hopper.git import remove_worktree
 from hopper.lodes import (
     archive_lode,
     create_lode,
@@ -290,7 +290,10 @@ class Server:
                 self._cleanup_worktree(archived)
 
     def _cleanup_worktree(self, lode: dict) -> None:
-        """Remove git worktree and branch for an archived lode, then run make sail."""
+        """Remove git worktree for an archived lode, then run make sail.
+
+        Never deletes the branch -- PRs need it to stay open.
+        """
         lode_id = lode["id"]
         worktree_path = get_lode_dir(lode_id) / "worktree"
         if not worktree_path.is_dir():
@@ -303,8 +306,6 @@ class Server:
             logger.warning(f"Cleanup skipped for {lode_id}: project not found")
             return
         remove_worktree(project.path, str(worktree_path))
-        branch = lode.get("branch", "") or f"hopper-{lode_id}"
-        delete_branch(project.path, branch)
         try:
             subprocess.run(["make", "sail"], cwd=project.path, capture_output=True)
         except Exception:
