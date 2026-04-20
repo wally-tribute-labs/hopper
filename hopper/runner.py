@@ -11,6 +11,7 @@ import sys
 import threading
 from pathlib import Path
 
+from hopper.claude import ensure_workspace_trusted
 from hopper.client import HopperConnection, connect
 from hopper.lodes import current_time_ms
 from hopper.projects import find_project
@@ -222,6 +223,9 @@ class BaseRunner:
     def _run_claude(self) -> tuple[int, str | None]:
         """Run Claude subprocess. Returns (exit_code, error_message)."""
         cmd, cwd = self._build_command()
+
+        if cwd:
+            ensure_workspace_trusted(cwd)
 
         env = self._get_subprocess_env()
 
