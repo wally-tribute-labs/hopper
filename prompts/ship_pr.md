@@ -32,18 +32,10 @@ command -v gh
 
 If `gh` is not found, stop immediately and report: "GitHub CLI (gh) is required for PR-based shipping. Install it from https://cli.github.com/"
 
-Check for a personal access token. GitHub suppresses pull_request webhook events for GitHub App tokens (including the default `GITHUB_TOKEN`), which prevents CI checks like Gate Review from triggering. A PAT with `repo` scope avoids this.
+Verify authentication:
 
 ```
-test -n "$GATE_PAT" && echo "PAT found" || echo "GATE_PAT not set"
-```
-
-If `GATE_PAT` is set, **all** `git push` and `gh` commands below must be prefixed with `GH_TOKEN="$GATE_PAT"` so the PAT is used instead of the default credential. If it is not set, fall back to the default `gh` auth — but warn that webhook events may not fire.
-
-Verify authentication with the token that will be used:
-
-```
-GH_TOKEN="${GATE_PAT:-}" gh auth status
+gh auth status
 ```
 
 If not authenticated, stop and report the issue.
@@ -67,7 +59,7 @@ Do not use `git stash` to isolate or hide test failures. Every ship should leave
 ### 4. Push the feature branch
 
 ```
-GH_TOKEN="${GATE_PAT:-}" git -c "credential.helper=!gh auth git-credential" push -u origin $branch
+git push -u origin $branch
 ```
 
 If the push fails due to diverged history, investigate — do not force-push without understanding why the histories diverged.
@@ -75,7 +67,7 @@ If the push fails due to diverged history, investigate — do not force-push wit
 ### 5. Create the pull request
 
 ```
-GH_TOKEN="${GATE_PAT:-}" gh pr create --title "$title" --body "$(cat <<'PRBODY'
+gh pr create --title "$title" --body "$(cat <<'PRBODY'
 ## Summary
 
 <1-3 sentence summary of the changes>

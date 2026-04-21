@@ -218,6 +218,9 @@ class BaseRunner:
         """Build environment for subprocess. Subclasses can override to add venv."""
         env = os.environ.copy()
         env["HOPPER_LID"] = self.lode_id
+        gate_pat = env.get("GATE_PAT")
+        if gate_pat:
+            env["GH_TOKEN"] = gate_pat
         return env
 
     def _run_claude(self) -> tuple[int, str | None]:
